@@ -164,6 +164,10 @@
   aside.sidebar.collapsed .theme-row{justify-content:center;margin:16px 0 0;padding:14px 0 0;}
   aside.sidebar.collapsed .theme-label{display:none;}
   @media (max-width:820px){ aside.sidebar.collapsed .theme-label{display:inline;} aside.sidebar.collapsed .theme-row{justify-content:space-between;margin:16px 4px 0;padding:14px 8px 0;} }
+  table.datatable tr.total td{font-weight:700;border-top:2px solid var(--border-strong);background:var(--surface-1);color:var(--text-primary);}
+  .kpi.kpi-blue{background:var(--p-turq);border-color:var(--p-turq);}
+  .kpi.kpi-blue .lbl,.kpi.kpi-blue .val,.kpi.kpi-blue .sub{color:#111111;}
+  .kpi.kpi-blue .lbl{opacity:0.85;}
   footer.foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-muted);}
   .mapcard{margin-top:16px;}
   .mapcard .legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:8px;font-size:11.5px;color:var(--text-secondary);}
@@ -354,6 +358,8 @@ const KEC_COLOR_DARK = {Sepaku:'#1dced8', Samboja:'#ff9d50', 'Samboja Barat':'#5
 function kecColor(name){ return isDark() ? KEC_COLOR_DARK[name] : KEC_COLOR_LIGHT[name]; }
 
 
+const TOTK='__TOTAL__';
+const sumDesa = kec => { const out={}; for(const d of Object.values(DATA_DESA[kec])) for(const f in d) if(typeof d[f]==='number') out[f]=(out[f]||0)+d[f]; return out; };
 const fmt = n => n.toLocaleString('id-ID');
 const pct = (a,b) => b ? (a/b*100).toFixed(1)+'%' : '-';
 const barH = n => Math.max(250, n*30);
@@ -369,7 +375,7 @@ const grid = () => isDark() ? '#2b303c' : '#e1e0d9';
 
 function kpiHtml(items){
   return '<div class="kpirow">'+items.map((it,i)=>`
-    <div class="kpi${i===0?' hero':''}"><p class="lbl">${it.l}</p><p class="val">${it.v}</p>${it.s?`<p class="sub">${it.s}</p>`:''}</div>
+    <div class="kpi${i===0?' hero':''}${it.cls?' '+it.cls:''}"><p class="lbl">${it.l}</p><p class="val">${it.v}</p>${it.s?`<p class="sub">${it.s}</p>`:''}</div>
   `).join('')+'</div>';
 }
 function chartCard(id,title,height){ return `<div class="card"><p class="title">${title}</p><div class="chartbox"${height?` style="height:${height}px;"`:''}><canvas id="${id}"></canvas></div></div>`; }
@@ -631,24 +637,25 @@ function render(){
     chartCalls.push(()=>doughnutChart('cAge', ['0-14 tahun','15-64 tahun (produktif)','65+ tahun'], [o.u014,o.u1564,o.u65], [cAqua(),cBlue(),cOrange()]));
     
     if(isAll){
-      const rows = allKec.map(k=>{
-        const ok = DATA[k].overview;
+      const rows = [allKec.slice(),TOTK].flat().map(k=>{
+        const ok = DATA[k===TOTK?'Semua Kecamatan':k].overview;
         const tot = ok.laki+ok.perempuan;
-        return `<tr><td>${k}</td><td>${fmt(tot)}</td><td>${fmt(ok.laki)}</td><td>${fmt(ok.perempuan)}</td><td>${fmt(ok.desa)}</td><td>±${fmt(ok.luas)} ha</td></tr>`;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(tot)}</td><td>${fmt(ok.laki)}</td><td>${fmt(ok.perempuan)}</td><td>${fmt(ok.desa)}</td><td>±${fmt(ok.luas)} ha</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:600px;">
         <tr><th>Kecamatan</th><th>Total penduduk</th><th>Laki-laki</th><th>Perempuan</th><th>Desa</th><th>Luas wilayah</th></tr>
         ${rows}</table></div>
+        <p class="note">Total jumlah desa (52) dan luas wilayah (±252.659 ha) mengikuti angka wilayah delineasi IKN pada publikasi, sehingga tidak sama dengan penjumlahan baris kecamatan di atas.</p>
       </div>`;
     }
     if(showDesaBreakdown){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cPopDesa','Persebaran penduduk antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cPopDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].penduduk), cBlue()));
-      const rows = desaNames.map(ds=>{
-        const ok = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(ok.penduduk)}</td><td>${fmt(ok.laki)}</td><td>${fmt(ok.perempuan)}</td><td>${fmt(ok.totalRT)}</td></tr>`;
+      const rows = [...desaNames,TOTK].map(ds=>{
+        const ok = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(ok.penduduk)}</td><td>${fmt(ok.laki)}</td><td>${fmt(ok.perempuan)}</td><td>${fmt(ok.totalRT)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:560px;">
@@ -674,9 +681,9 @@ function render(){
       const allKecNames = KEC.slice(1);
       content += chartCard('cVokKec','Persebaran status bekerja/berusaha antar kecamatan');
       chartCalls.push(()=>barChart('cVokKec', allKecNames, allKecNames.map(k=>DATA[k].vokasi.bekerja), cBlue()));
-      const rows = allKecNames.map(k=>{
-        const vk = DATA[k].vokasi;
-        return `<tr><td>${k}</td><td>${fmt(vk.usiaProduktif)}</td><td>${fmt(vk.bekerja)}</td><td>${pct(vk.bekerja,vk.usiaProduktif)}</td><td>${fmt(vk.berusaha)}</td><td>${pct(vk.berusaha,vk.usiaProduktif)}</td><td>${fmt(vk.tidakAktifKerja)}</td><td>${pct(vk.tidakAktifKerja,vk.usiaProduktif)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const vk = DATA[k===TOTK?'Semua Kecamatan':k].vokasi;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(vk.usiaProduktif)}</td><td>${fmt(vk.bekerja)}</td><td>${pct(vk.bekerja,vk.usiaProduktif)}</td><td>${fmt(vk.berusaha)}</td><td>${pct(vk.berusaha,vk.usiaProduktif)}</td><td>${fmt(vk.tidakAktifKerja)}</td><td>${pct(vk.tidakAktifKerja,vk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -688,9 +695,9 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cVokDesa','Persebaran status bekerja antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cVokDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].bekerja), cBlue()));
-      const rows2 = desaNames.map(ds=>{
-        const vk = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(vk.usiaProduktif)}</td><td>${fmt(vk.bekerja)}</td><td>${pct(vk.bekerja,vk.usiaProduktif)}</td><td>${fmt(vk.berusaha)}</td><td>${pct(vk.berusaha,vk.usiaProduktif)}</td><td>${fmt(vk.tidakAktifKerja)}</td><td>${pct(vk.tidakAktifKerja,vk.usiaProduktif)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const vk = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(vk.usiaProduktif)}</td><td>${fmt(vk.bekerja)}</td><td>${pct(vk.bekerja,vk.usiaProduktif)}</td><td>${fmt(vk.berusaha)}</td><td>${pct(vk.berusaha,vk.usiaProduktif)}</td><td>${fmt(vk.tidakAktifKerja)}</td><td>${pct(vk.tidakAktifKerja,vk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -728,9 +735,9 @@ function render(){
       const allKecNames = KEC.slice(1);
       content += chartCard('cUmkmKec','Persebaran pelaku usaha antar kecamatan');
       chartCalls.push(()=>barChart('cUmkmKec', allKecNames, allKecNames.map(k=>DATA[k].umkm.pelakuUsaha), cAqua()));
-      const rows = allKecNames.map(k=>{
-        const uk = DATA[k].umkm;
-        return `<tr><td>${k}</td><td>${fmt(uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsaha)}</td><td>${pct(uk.pelakuUsaha,uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsahaMuda)}</td><td>${fmt(uk.calonWirausaha)}</td><td>${pct(uk.calonWirausaha,uk.usiaProduktif)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const uk = DATA[k===TOTK?'Semua Kecamatan':k].umkm;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsaha)}</td><td>${pct(uk.pelakuUsaha,uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsahaMuda)}</td><td>${fmt(uk.calonWirausaha)}</td><td>${pct(uk.calonWirausaha,uk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:640px;">
@@ -742,9 +749,9 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cUmkmDesa','Persebaran pelaku usaha antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cUmkmDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].pelakuUsaha), cAqua()));
-      const rows2 = desaNames.map(ds=>{
-        const uk = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsaha)}</td><td>${pct(uk.pelakuUsaha,uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsahaMuda)}</td><td>${fmt(uk.calonWirausaha)}</td><td>${pct(uk.calonWirausaha,uk.usiaProduktif)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const uk = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsaha)}</td><td>${pct(uk.pelakuUsaha,uk.usiaProduktif)}</td><td>${fmt(uk.pelakuUsahaMuda)}</td><td>${fmt(uk.calonWirausaha)}</td><td>${pct(uk.calonWirausaha,uk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:640px;">
@@ -800,9 +807,9 @@ function render(){
       const allKecNames = KEC.slice(1);
       content += chartCard('cDigitalKec','Persebaran kepemilikan smartphone antar kecamatan');
       chartCalls.push(()=>barChart('cDigitalKec', allKecNames, allKecNames.map(k=>DATA[k].digital.smartphone), cViolet()));
-      const rows = allKecNames.map(k=>{
-        const gk = DATA[k].digital;
-        return `<tr><td>${k}</td><td>${fmt(gk.usiaProduktif)}</td><td>${fmt(gk.smartphone)}</td><td>${pct(gk.smartphone,gk.usiaProduktif)}</td><td>${fmt(gk.komputer)}</td><td>${pct(gk.komputer,gk.usiaProduktif)}</td><td>${fmt(gk.kesenjangan)}</td><td>${pct(gk.kesenjangan,gk.usiaProduktif)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const gk = DATA[k===TOTK?'Semua Kecamatan':k].digital;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(gk.usiaProduktif)}</td><td>${fmt(gk.smartphone)}</td><td>${pct(gk.smartphone,gk.usiaProduktif)}</td><td>${fmt(gk.komputer)}</td><td>${pct(gk.komputer,gk.usiaProduktif)}</td><td>${fmt(gk.kesenjangan)}</td><td>${pct(gk.kesenjangan,gk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -814,9 +821,9 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cDigitalDesa','Persebaran kepemilikan smartphone antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cDigitalDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].smartphone), cViolet()));
-      const rows2 = desaNames.map(ds=>{
-        const gk = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(gk.usiaProduktif)}</td><td>${fmt(gk.smartphone)}</td><td>${pct(gk.smartphone,gk.usiaProduktif)}</td><td>${fmt(gk.komputer)}</td><td>${pct(gk.komputer,gk.usiaProduktif)}</td><td>${fmt(gk.kesenjangan)}</td><td>${pct(gk.kesenjangan,gk.usiaProduktif)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const gk = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(gk.usiaProduktif)}</td><td>${fmt(gk.smartphone)}</td><td>${pct(gk.smartphone,gk.usiaProduktif)}</td><td>${fmt(gk.komputer)}</td><td>${pct(gk.komputer,gk.usiaProduktif)}</td><td>${fmt(gk.kesenjangan)}</td><td>${pct(gk.kesenjangan,gk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -840,9 +847,9 @@ function render(){
       const allKecNames = KEC.slice(1);
       content += chartCard('cEduKec','Persebaran sasaran pendidikan kesetaraan (T0-T3) antar kecamatan');
       chartCalls.push(()=>barChart('cEduKec', allKecNames, allKecNames.map(k=>DATA[k].pendidikan.sasaran), cBlue()));
-      const rows = allKecNames.map(k=>{
-        const pk = DATA[k].pendidikan;
-        return `<tr><td>${k}</td><td>${fmt(pk.usiaProduktif)}</td><td>${fmt(pk.sasaran)}</td><td>${pct(pk.sasaran,pk.usiaProduktif)}</td><td>${fmt(pk.t4)}</td><td>${pct(pk.t4,pk.usiaProduktif)}</td><td>${fmt(pk.t5+pk.t6+pk.t7)}</td><td>${pct(pk.t5+pk.t6+pk.t7,pk.usiaProduktif)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const pk = DATA[k===TOTK?'Semua Kecamatan':k].pendidikan;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(pk.usiaProduktif)}</td><td>${fmt(pk.sasaran)}</td><td>${pct(pk.sasaran,pk.usiaProduktif)}</td><td>${fmt(pk.t4)}</td><td>${pct(pk.t4,pk.usiaProduktif)}</td><td>${fmt(pk.t5+pk.t6+pk.t7)}</td><td>${pct(pk.t5+pk.t6+pk.t7,pk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -854,9 +861,9 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cEduDesa','Persebaran sasaran pendidikan kesetaraan antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cEduDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].sasaran), cBlue()));
-      const rows2 = desaNames.map(ds=>{
-        const pk = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(pk.usiaProduktif)}</td><td>${fmt(pk.sasaran)}</td><td>${pct(pk.sasaran,pk.usiaProduktif)}</td><td>${fmt(pk.t4)}</td><td>${pct(pk.t4,pk.usiaProduktif)}</td><td>${fmt(pk.t5+pk.t6+pk.t7)}</td><td>${pct(pk.t5+pk.t6+pk.t7,pk.usiaProduktif)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const pk = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(pk.usiaProduktif)}</td><td>${fmt(pk.sasaran)}</td><td>${pct(pk.sasaran,pk.usiaProduktif)}</td><td>${fmt(pk.t4)}</td><td>${pct(pk.t4,pk.usiaProduktif)}</td><td>${fmt(pk.t5+pk.t6+pk.t7)}</td><td>${pct(pk.t5+pk.t6+pk.t7,pk.usiaProduktif)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:680px;">
@@ -888,25 +895,25 @@ function render(){
     content = kpiHtml([
       {l:'Penyandang disabilitas total', v:fmt(dis.disTotal), s:'ringan+sedang+berat'},
       {l:'Penyandang disabilitas (sedang+berat)', v:fmt(dis.disabilitas)},
-      {l:'Total lansia', v:fmt(l.lansia)},
+      {l:'Total lansia', v:fmt(l.lansia), cls:'kpi-blue'},
       {l:'Lansia tanpa jaminan kesehatan', v:fmt(l.tanpaJaminan), s:pct(l.tanpaJaminan,l.lansia)}
     ]) + `<div class="chartgrid">
       ${chartCard('cDisTingkat','Penyandang disabilitas menurut tingkat keparahan')}
       ${chartCard('cLansiaJaminan','Kepemilikan jaminan kesehatan lansia')}
     </div>`;
-    chartCalls.push(()=>doughnutChart('cDisTingkat', ['Berat','Sedang','Ganda (≥2 jenis)'], [dis.berat,dis.sedang,dis.ganda], [cOrange(),cYellow(),cBlue()]));
+    chartCalls.push(()=>doughnutChart('cDisTingkat', ['Ringan','Sedang','Berat'], [dis.disTotal-dis.berat-dis.sedang,dis.sedang,dis.berat], [cBlue(),cYellow(),cOrange()]));
     chartCalls.push(()=>doughnutChart('cLansiaJaminan', ['Memiliki jaminan','Tidak memiliki jaminan'], [l.lansia-l.tanpaJaminan,l.tanpaJaminan], [cBlue(),cOrange()]));
     if(isAll){
       const allKecNames = KEC.slice(1);
       content += chartCard('cDisLanKec','Persebaran disabilitas & lansia antar kecamatan');
       chartCalls.push(()=>twoSeriesBarChart('cDisLanKec', allKecNames, 'Disabilitas total', allKecNames.map(k=>DATA[k].disabilitas.disTotal), cBlue(), 'Lansia', allKecNames.map(k=>DATA[k].lansia.lansia), cOrange()));
-      const rows = allKecNames.map(k=>{
-        const dk = DATA[k].disabilitas, lk = DATA[k].lansia;
-        return `<tr><td>${k}</td><td>${fmt(dk.disTotal)}</td><td>${fmt(dk.disabilitas)}</td><td>${fmt(lk.lansia)}</td><td>${fmt(lk.tanpaJaminan)}</td><td>${pct(lk.tanpaJaminan,lk.lansia)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const dk = DATA[k===TOTK?'Semua Kecamatan':k].disabilitas, lk = DATA[k===TOTK?'Semua Kecamatan':k].lansia;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(dk.disTotal)}</td><td>${fmt(dk.disTotal-dk.disabilitas)}</td><td>${fmt(dk.disabilitas)}</td><td>${fmt(lk.lansia)}</td><td>${fmt(lk.tanpaJaminan)}</td><td>${pct(lk.tanpaJaminan,lk.lansia)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
-        <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:600px;">
-        <tr><th>Kecamatan</th><th>Disabilitas total</th><th>Disabilitas sedang+berat</th><th>Lansia</th><th>Lansia tanpa jaminan</th><th>%</th></tr>
+        <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:700px;">
+        <tr><th>Kecamatan</th><th>Disabilitas total</th><th>Disabilitas ringan</th><th>Disabilitas sedang+berat</th><th>Lansia</th><th>Lansia tanpa jaminan</th><th>%</th></tr>
         ${rows}</table></div>
       </div>`;
     }
@@ -914,13 +921,13 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cDisLanDesa','Persebaran disabilitas & lansia antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>twoSeriesBarChart('cDisLanDesa', desaNames, 'Disabilitas total', desaNames.map(ds=>DATA_DESA[kec][ds].disTotal), cBlue(), 'Lansia', desaNames.map(ds=>DATA_DESA[kec][ds].lansia), cOrange()));
-      const rows2 = desaNames.map(ds=>{
-        const dk = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(dk.disTotal)}</td><td>${fmt(dk.disabilitas)}</td><td>${fmt(dk.lansia)}</td><td>${fmt(dk.tanpaJaminan)}</td><td>${pct(dk.tanpaJaminan,dk.lansia)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const dk = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(dk.disTotal)}</td><td>${fmt(dk.disTotal-dk.disabilitas)}</td><td>${fmt(dk.disabilitas)}</td><td>${fmt(dk.lansia)}</td><td>${fmt(dk.tanpaJaminan)}</td><td>${pct(dk.tanpaJaminan,dk.lansia)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
-        <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:600px;">
-        <tr><th>Desa</th><th>Disabilitas total</th><th>Disabilitas sedang+berat</th><th>Lansia</th><th>Lansia tanpa jaminan</th><th>%</th></tr>
+        <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:700px;">
+        <tr><th>Desa</th><th>Disabilitas total</th><th>Disabilitas ringan</th><th>Disabilitas sedang+berat</th><th>Lansia</th><th>Lansia tanpa jaminan</th><th>%</th></tr>
         ${rows2}</table></div>
       </div>`;
     }
@@ -959,7 +966,7 @@ function render(){
     content += `<div class="card" style="margin-bottom:16px;"><p class="title">Rincian tingkat kesejahteraan (${kecLabel})</p>
       <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:${isAll?'720px':'420px'};">
       <tr><th>Tkt</th><th>Rentang</th><th>Istilah</th><th>Kelompok</th><th>Jml RT</th><th>% RT</th>${isAll?'<th>Penduduk</th><th>% Pdd</th><th>Tanpa bekerja</th><th>Ada lansia</th>':''}</tr>
-      ${rows}</table></div>
+      ${rows}<tr class="total"><td>Total</td><td></td><td></td><td></td><td>${fmt(t.totalRT)}</td><td>100.0%</td>${isAll?`<td>${fmt(146727)}</td><td>100%</td><td>15.2%</td><td>22.4%</td>`:''}</tr></table></div>
       ${isAll?'':'<p class="note">Kolom penduduk, tanpa bekerja, dan ada lansia hanya tersedia di level delineasi (seluruh kecamatan), belum dirinci per kecamatan.</p>'}
       <p class="note">Skor = 25 × (Hunian/18 + Aset/41 + Pendidikan/8 + Komposisi &amp; ketenagakerjaan/9). Empat dimensi berbobot setara (25% masing-masing). Istilah "Sangat Rentan...Sangat Mapan" dipakai (bukan "miskin") karena ini indeks proksi non-moneter mengikuti prinsip Proxy Means Testing (DTKS/Regsosek/DTSEN), bukan pengukuran kemiskinan resmi BPS berbasis pengeluaran.</p>
     </div>`;
@@ -1019,9 +1026,9 @@ function render(){
       const allKecNames = KEC.slice(1);
       content += chartCard('cAsetKec','Persebaran rumah tangga tanpa aset antar kecamatan');
       chartCalls.push(()=>barChart('cAsetKec', allKecNames, allKecNames.map(k=>DATA[k].aset.tanpaAset), cAqua()));
-      const rows = allKecNames.map(k=>{
-        const ak = DATA[k].aset;
-        return `<tr><td>${k}</td><td>${fmt(ak.totalRT)}</td><td>${fmt(ak.tanah)}</td><td>${pct(ak.tanah,ak.totalRT)}</td><td>${fmt(ak.tabungan+ak.emas)}</td><td>${fmt(ak.tanpaAset)}</td><td>${pct(ak.tanpaAset,ak.totalRT)}</td></tr>`;
+      const rows = [allKecNames.slice(),TOTK].flat().map(k=>{
+        const ak = DATA[k===TOTK?'Semua Kecamatan':k].aset;
+        return `<tr${k===TOTK?' class="total"':''}><td>${k===TOTK?'Total':k}</td><td>${fmt(ak.totalRT)}</td><td>${fmt(ak.tanah)}</td><td>${pct(ak.tanah,ak.totalRT)}</td><td>${fmt(ak.tabungan+ak.emas)}</td><td>${fmt(ak.tanpaAset)}</td><td>${pct(ak.tanpaAset,ak.totalRT)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar kecamatan</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:640px;">
@@ -1034,9 +1041,9 @@ function render(){
       const desaNames = Object.keys(DATA_DESA[kec]).sort();
       content += chartCard('cAsetDesa','Persebaran rumah tangga tanpa aset antar desa, '+kec, barH(Object.keys(DATA_DESA[kec]).length));
       chartCalls.push(()=>barChart('cAsetDesa', desaNames, desaNames.map(ds=>DATA_DESA[kec][ds].tanpaAset3), cAqua()));
-      const rows2 = desaNames.map(ds=>{
-        const ak = DATA_DESA[kec][ds];
-        return `<tr><td>${ds}</td><td>${fmt(ak.totalRT)}</td><td>${fmt(ak.aset_tanah)}</td><td>${pct(ak.aset_tanah,ak.totalRT)}</td><td>${fmt(ak.aset_tabungan+ak.aset_emas)}</td><td>${fmt(ak.tanpaAset3)}</td><td>${pct(ak.tanpaAset3,ak.totalRT)}</td></tr>`;
+      const rows2 = [...desaNames,TOTK].map(ds=>{
+        const ak = ds===TOTK ? sumDesa(kec) : DATA_DESA[kec][ds];
+        return `<tr${ds===TOTK?' class="total"':''}><td>${ds===TOTK?'Total '+kec:ds}</td><td>${fmt(ak.totalRT)}</td><td>${fmt(ak.aset_tanah)}</td><td>${pct(ak.aset_tanah,ak.totalRT)}</td><td>${fmt(ak.aset_tabungan+ak.aset_emas)}</td><td>${fmt(ak.tanpaAset3)}</td><td>${pct(ak.tanpaAset3,ak.totalRT)}</td></tr>`;
       }).join('');
       content += `<div class="card" style="margin-top:16px;"><p class="title">Rincian persebaran antar desa</p>
         <div style="overflow-x:auto;"><table class="datatable" style="table-layout:auto;min-width:640px;">
